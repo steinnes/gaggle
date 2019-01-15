@@ -17,6 +17,10 @@ class GaggleServiceError(Exception):
     pass
 
 
+class AccessDenied(GaggleServiceError):
+    pass
+
+
 class MemoryCache:
     _CACHE = {}
 
@@ -57,11 +61,9 @@ class Service:
                 cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
                 headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
                 if cooked_request.method == 'GET':
-                    async with self._session.get(cooked_request.uri, headers=headers) as request:
-                        return request
+                    return await self._session.get(cooked_request.uri, headers=headers)
                 elif cooked_request.method == 'POST':
-                    async with self._session.post(cooked_request.uri, data=cooked_request.body) as request:
-                        return request
+                    return await self._session.post(cooked_request.uri, data=cooked_request.body, headers=headers)
             while True:
                 if self._retry():
                     try:
@@ -69,13 +71,15 @@ class Service:
                         if response.status == 401:
                             self._gaggle_client.refresh_token()
                             response = await doit()
+                            if response.status == 401:
+                                raise AccessDenied("Access denied even after refreshing token")
                         break
                     except asyncio.TimeoutError as e:
                         pass  # XXX: logging.log...
                 else:
                     raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
 
-            return await response.json()
+            return response
         return inner
 
     def __getattribute__(self, attr):
