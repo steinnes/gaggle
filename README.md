@@ -48,3 +48,19 @@ Results in something like:
 {'kind': 'drive#file', 'id': '...', 'name': 'spreadsheet.xlsx', 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
 {'kind': 'drive#file', 'id': '...', 'name': 'spreadsheet', 'mimeType': 'application/vnd.google-apps.spreadsheet'}
 ```
+
+
+## Installation
+
+```
+$ pip install gaggle
+```
+
+## Testing and developing
+
+I've included a handy Makefile to make these things fairly easy.
+
+```
+$ make setup
+$ make test
+```
