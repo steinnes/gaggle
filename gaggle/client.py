@@ -1,5 +1,7 @@
 import asyncio
 
+from contextlib import asynccontextmanager
+
 import google.auth.transport.requests
 from google.oauth2.credentials import Credentials
 from apiclient import discovery
@@ -41,9 +43,10 @@ class Retries:
 
 
 class Service:
-    def __init__(self, discovery_client, gaggle_client, retries=None):
+    def __init__(self, session, discovery_client, gaggle_client, retries=None):
         if retries is None:
             retries = 5
+        self._session = session
         self._retry = Retries(retries)
         self._disco_client = discovery_client
         self._gaggle_client = gaggle_client
@@ -53,12 +56,12 @@ class Service:
             async def doit():
                 cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
                 headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
-                async with aiohttp.ClientSession(headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as session:
-                    print("session loop=", session._loop, id(session._loop))
-                    if cooked_request.method == 'GET':
-                        return await session.get(cooked_request.uri)
-                    elif cooked_request.method == 'POST':
-                        return await session.post(cooked_request.uri, data=cooked_request.body)
+                if cooked_request.method == 'GET':
+                    async with self._session.get(cooked_request.uri, headers=headers) as request:
+                        return request
+                elif cooked_request.method == 'POST':
+                    async with self._session.post(cooked_request.uri, data=cooked_request.body) as request:
+                        return request
             while True:
                 if self._retry():
                     try:
@@ -72,7 +75,7 @@ class Service:
                 else:
                     raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
 
-            return response
+            return await response.json()
         return inner
 
     def __getattribute__(self, attr):
@@ -86,19 +89,20 @@ class Service:
             # it's a method which will elicit a request, which we pass into self._request(..)
             subject = getattr(self._disco_client, attr)
             if subject.__func__.__name__ == 'methodResource':
-                return Service(subject(), self._gaggle_client)
+                return Service(self._session, subject(), self._gaggle_client)
             elif subject.__func__.__name__ == 'method':
                 return self._request(attr)
 
 
 class Client:
     _reals = ['access_token', 'credentials', 'refresh_token', 'http']
-    def __init__(self, credentials: Credentials=None, **kwargs):
+    def __init__(self, session, credentials: Credentials=None, **kwargs):
         if credentials is None:
             credentials = self._make_credentials(**kwargs)
         self.credentials = credentials
         self.access_token = credentials.token
         self.http = httplib2.Http()
+        self._session = session
         self._services = {}
 
     @staticmethod
@@ -120,7 +124,7 @@ class Client:
                 if version is not None:
                     args.append(version)
                 srv = discovery.build(*args, http=self.http, cache=MemoryCache())
-                self._services[srv_key] = Service(srv, self)
+                self._services[srv_key] = Service(self._session, srv, self)
             return self._services[srv_key]
 
         return inner
