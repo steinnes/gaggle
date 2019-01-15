@@ -10,6 +10,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Internet :: WWW/HTTP",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.5",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
 ]
@@ -18,7 +19,7 @@ license = "BSD-3-Clause"
 homepage = "https://github.com/steinnes/gaggle"
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.5"
 aiohttp = "^3.5.3"
 google-api-python-client = "^1.7.7"
 google-auth = "^1.6.2"
