@@ -1,11 +1,8 @@
 import asyncio
 
-from contextlib import asynccontextmanager
-
 import google.auth.transport.requests
 from google.oauth2.credentials import Credentials
 from apiclient import discovery
-import aiohttp
 
 import httplib2
 
@@ -75,7 +72,8 @@ class Service:
                                 raise AccessDenied("Access denied even after refreshing token")
                         break
                     except asyncio.TimeoutError as e:
-                        pass  # XXX: logging.log...
+                        # XXX: logging.log...
+                        print("timeout:", e)
                 else:
                     raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
 
@@ -100,7 +98,8 @@ class Service:
 
 class Client:
     _reals = ['access_token', 'credentials', 'refresh_token', 'http']
-    def __init__(self, session, credentials: Credentials=None, **kwargs):
+
+    def __init__(self, session, credentials: Credentials = None, **kwargs):
         if credentials is None:
             credentials = self._make_credentials(**kwargs)
         self.credentials = credentials
@@ -110,7 +109,7 @@ class Client:
         self._services = {}
 
     @staticmethod
-    def _make_credentials(*, token, refresh_token=None, id_token=None, token_uri=None, client_id=None, client_secret=None):
+    def _make_credentials(*, token, refresh_token=None, id_token=None, token_uri=None, client_id=None, client_secret=None):  # noqa
         if token_uri is None:
             token_uri = DEFAULT_GOOGLE_TOKEN_URI
         return Credentials(token, refresh_token, id_token, token_uri, client_id, client_secret)
@@ -124,7 +123,7 @@ class Client:
         def inner(version=None):
             srv_key = f'{service_name}:{version}'
             if srv_key not in self._services:
-                args = [service_name,]
+                args = [service_name, ]
                 if version is not None:
                     args.append(version)
                 srv = discovery.build(*args, http=self.http, cache=MemoryCache())
@@ -139,4 +138,3 @@ class Client:
             return object.__getattribute__(self, attr)
         # let's treat this attribute as a google service like 'drive'
         return self._builder(attr)
-
