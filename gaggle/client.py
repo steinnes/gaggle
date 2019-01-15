@@ -80,20 +80,23 @@ class Service:
             return response
         return inner
 
+    def _wrap(self, attr):
+        # an attribute on self._disco_client, can either be a resource, in which case we need to
+        # re-wrap it as a Service object
+        # OR:
+        # it's a method which will elicit a request, which we pass into self._request(..)
+        subject = getattr(self._disco_client, attr)
+        if subject.__func__.__name__ == 'methodResource':
+            return Service(self._session, subject(), self._gaggle_client)
+        elif subject.__func__.__name__ == 'method':
+            return self._request(attr)
+
     def __getattribute__(self, attr):
         if attr.startswith('_'):
             # my own attributes
             return object.__getattribute__(self, attr)
         else:
-            # an attribute on self._disco_client, can either be a resource, in which case we need to
-            # re-wrap it as a Service object
-            # OR:
-            # it's a method which will elicit a request, which we pass into self._request(..)
-            subject = getattr(self._disco_client, attr)
-            if subject.__func__.__name__ == 'methodResource':
-                return Service(self._session, subject(), self._gaggle_client)
-            elif subject.__func__.__name__ == 'method':
-                return self._request(attr)
+            return self._wrap(attr)
 
 
 class Client:
