@@ -1,7 +1,18 @@
+import asyncio
+
+import google.auth.transport.requests
+from google.oauth2.credentials import Credentials
 from apiclient import discovery
 import aiohttp
 
 import httplib2
+
+
+DEFAULT_GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token'
+
+
+class GaggleServiceError(Exception):
+    pass
 
 
 class MemoryCache:
@@ -17,21 +28,51 @@ class MemoryCache:
         self._CACHE[key] = value
 
 
+class Retries:
+    def __init__(self, num):
+        self.count = num
+        self.remaining = num
+
+    def __call__(self):
+        if self.remaining > 0:
+            self.remaining -= 1
+            return True
+        return False
+
 
 class Service:
-    def __init__(self, discovery_client, gaggle_client):
+    def __init__(self, discovery_client, gaggle_client, retries=None):
+        if retries is None:
+            retries = 5
+        self._retry = Retries(retries)
         self._disco_client = discovery_client
         self._gaggle_client = gaggle_client
 
     def _request(self, name):
         async def inner(*args, **kwargs):
-            cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
-            headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
-            async with aiohttp.ClientSession(headers=headers) as session:
-                if cooked_request.method == 'GET':
-                    return await session.get(cooked_request.uri)
-                elif cooked_request.method == 'POST':
-                    return await session.post(cooked_request.uri, data=cooked_request.body)
+            async def doit():
+                cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
+                headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
+                async with aiohttp.ClientSession(headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as session:
+                    print("session loop=", session._loop, id(session._loop))
+                    if cooked_request.method == 'GET':
+                        return await session.get(cooked_request.uri)
+                    elif cooked_request.method == 'POST':
+                        return await session.post(cooked_request.uri, data=cooked_request.body)
+            while True:
+                if self._retry():
+                    try:
+                        response = await doit()
+                        if response.status == 401:
+                            self._gaggle_client.refresh_token()
+                            response = await doit()
+                        break
+                    except asyncio.TimeoutError as e:
+                        pass  # XXX: logging.log...
+                else:
+                    raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
+
+            return response
         return inner
 
     def __getattribute__(self, attr):
@@ -51,12 +92,25 @@ class Service:
 
 
 class Client:
-    def __init__(self, access_token, refresh_token=None):
-        self.access_token = access_token
-        self.refresh_token = refresh_token
+    _reals = ['access_token', 'credentials', 'refresh_token', 'http']
+    def __init__(self, credentials: Credentials=None, **kwargs):
+        if credentials is None:
+            credentials = self._make_credentials(**kwargs)
+        self.credentials = credentials
+        self.access_token = credentials.token
         self.http = httplib2.Http()
-        self._reals = ['access_token', 'refresh_token', 'http']
         self._services = {}
+
+    @staticmethod
+    def _make_credentials(*, token, refresh_token=None, id_token=None, token_uri=None, client_id=None, client_secret=None):
+        if token_uri is None:
+            token_uri = DEFAULT_GOOGLE_TOKEN_URI
+        return Credentials(token, refresh_token, id_token, token_uri, client_id, client_secret)
+
+    def refresh_token(self):
+        request = google.auth.transport.requests.Request()
+        self.credentials.refresh(request)
+        self.access_token = self.credentials.token
 
     def _builder(self, service_name):
         def inner(version=None):
