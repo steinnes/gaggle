@@ -1,3 +1,4 @@
+import alog
 import asyncio
 
 import google.auth.transport.requests
@@ -23,8 +24,7 @@ class MemoryCache:
 
     def get(self, key):
         hit = self._CACHE.get(key)
-        if hit is not None:
-            print("Cache hit!")
+        alog.debug(f"Cache {hit is not None and 'hit' or 'miss'}: {key}")
         return self._CACHE.get(key)
 
     def set(self, key, value):
@@ -57,24 +57,27 @@ class Service:
             async def doit():
                 cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
                 headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
+                alog.debug(f"Service._request.doit(), cooked_request={cooked_request.method} {cooked_request.uri}")
                 if cooked_request.method == 'GET':
                     return await self._session.get(cooked_request.uri, headers=headers)
                 elif cooked_request.method == 'POST':
                     return await self._session.post(cooked_request.uri, data=cooked_request.body, headers=headers)
             while True:
-                if self._retry():
-                    try:
+                try:
+                    response = await doit()
+                    if response.status == 401:
+                        alog.info("401 status, refreshing token")
+                        self._gaggle_client.refresh_token()
                         response = await doit()
                         if response.status == 401:
-                            self._gaggle_client.refresh_token()
-                            response = await doit()
-                            if response.status == 401:
-                                raise AccessDenied("Access denied even after refreshing token")
-                        break
-                    except asyncio.TimeoutError as e:
-                        # XXX: logging.log...
-                        print("timeout:", e)
-                else:
+                            alog.error("Access denied even after refreshing token:")
+                            alog.error(await response.content())
+                            raise AccessDenied("Access denied even after refreshing token")
+                    break
+                except asyncio.TimeoutError as e:
+                    alog.error("timeout: {}".format(e))
+                # if we got here, it's because we encountered a timeout and might want to retry
+                if not self._retry():
                     raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
 
             return response
@@ -100,7 +103,7 @@ class Service:
 
 
 class Client:
-    _reals = ['access_token', 'credentials', 'refresh_token', 'http']
+    _reals = ['access_token', 'credentials', 'refresh_token', 'http', 'log']
 
     def __init__(self, session, credentials: Credentials = None, **kwargs):
         if credentials is None:
