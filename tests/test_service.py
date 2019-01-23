@@ -6,7 +6,7 @@ from unittest import mock
 
 from googleapiclient.http import HttpRequest
 
-from gaggle.client import GaggleServiceError, Retries, Service
+from gaggle.client import AccessDenied, GaggleServiceError, Retries, Service
 
 
 class FakeDiscoClient:
@@ -22,7 +22,6 @@ class CallCounter:
         if attr != 'calls':
             object.__getattribute__(self, 'calls')[attr] += 1
         return object.__getattribute__(self, attr)
-
 
 
 def test_service_getattr_returns_actual_attr_if_private():
@@ -63,14 +62,14 @@ async def test_service_request_retries():
 
     sess = TimeoutingSession()
     s = Service(sess, FakeDiscoClient(), mock.Mock(), retries=1)
-    with pytest.raises(GaggleServiceError) as exc:
+    with pytest.raises(GaggleServiceError):
         await s.method()
     assert sess.calls['get'] == 2
     assert s._retry.remaining == 0
 
     sess = TimeoutingSession()
     s = Service(sess, FakeDiscoClient(), mock.Mock(), retries=0)
-    with pytest.raises(GaggleServiceError) as exc:
+    with pytest.raises(GaggleServiceError):
         await s.method()
     assert sess.calls['get'] == 1
     assert s._retry.remaining == 0
@@ -80,6 +79,7 @@ async def test_service_request_retries():
 async def test_service_request_refresh_token():
     class UnauthorizedResponse:
         status = 401
+
         async def content(self):
             return "User not authorized to access this mock data"
 
@@ -90,7 +90,7 @@ async def test_service_request_refresh_token():
     sess = UnauthorizingSession()
     gaggle_client = mock.Mock()
     s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
-    with pytest.raises(GaggleServiceError) as exc:
+    with pytest.raises(AccessDenied):
         await s.method()
     assert gaggle_client.refresh_token.called
     assert sess.calls['get'] == 2
