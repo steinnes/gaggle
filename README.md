@@ -4,7 +4,7 @@ An aiohttp-based Google API client.
 
 The google-api-python-client requirement is because this library uses it to
 discover services and prepare requests, leveraging the prepare+execute pattern
-underpinning the httplib2 transport.
+implemented in googleapiclient.HttpRequest.
 
 ## Usage
 
