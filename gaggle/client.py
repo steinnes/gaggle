@@ -71,7 +71,7 @@ class Service:
                         response = await doit()
                         if response.status == 401:
                             alog.error("Access denied even after refreshing token:")
-                            alog.error(await response.content())
+                            alog.error(await response.text())
                             raise AccessDenied("Access denied even after refreshing token")
                     break
                 except asyncio.TimeoutError as e:

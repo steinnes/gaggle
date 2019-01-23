@@ -80,7 +80,7 @@ async def test_service_request_refresh_token():
     class UnauthorizedResponse:
         status = 401
 
-        async def content(self):
+        async def text(self):
             return "User not authorized to access this mock data"
 
     class UnauthorizingSession(CallCounter):
