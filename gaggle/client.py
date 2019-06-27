@@ -24,7 +24,7 @@ class MemoryCache:
 
     def get(self, key):
         hit = self._CACHE.get(key)
-        logger.debug(f"Cache {hit is not None and 'hit' or 'miss'}: {key}")
+        logger.info(f"Cache {hit is not None and 'hit' or 'miss'}: {key}")
         return self._CACHE.get(key)
 
     def set(self, key, value):
@@ -57,7 +57,7 @@ class Service:
             async def doit():
                 cooked_request = getattr(self._disco_client, name)(*args, **kwargs)
                 headers = {'Authorization': f'Bearer {self._gaggle_client.access_token}', **cooked_request.headers}
-                logger.debug(f"Service._request.doit(), cooked_request={cooked_request.method} {cooked_request.uri}")
+                logger.info(f"Service._request.doit(), cooked_request={cooked_request.method} {cooked_request.uri}")
                 if cooked_request.method == 'GET':
                     return await self._session.get(cooked_request.uri, headers=headers)
                 elif cooked_request.method == 'POST':
