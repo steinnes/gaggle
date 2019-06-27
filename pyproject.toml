@@ -21,7 +21,6 @@ python = "^3.7"
 aiohttp = "^3.5.3"
 google-api-python-client = "^1.7.7"
 google-auth = "^1.6.2"
-alog = "^0.9.13"
 
 [tool.poetry.dev-dependencies]
 pytest = "^4.0"
