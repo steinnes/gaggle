@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gaggle"
-version = "0.2.1"
+version = "0.2.2rc0"
 description = "aiohttp wrapper for google-api-client-python"
 authors = ["Steinn Eldjarn Sigurdarson <steinnes@gmail.com>"]
 keywords = ["google api", "async"]
