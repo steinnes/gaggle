@@ -70,12 +70,12 @@ class Service:
                         self._gaggle_client.refresh_token()
                         response = await doit()
                         if response.status == 401:
-                            logger.error("Access denied even after refreshing token:")
-                            logger.error(await response.text())
+                            logger.warning("Access denied even after refreshing token:")
+                            logger.warning(await response.text())
                             raise AccessDenied("Access denied even after refreshing token")
                     break
                 except asyncio.TimeoutError as e:
-                    logger.error("timeout: {}".format(e))
+                    logger.warning("timeout: {}".format(e))
                 # if we got here, it's because we encountered a timeout and might want to retry
                 if not self._retry():
                     raise GaggleServiceError("Exhausted retries ({})".format(self._retry.count))
