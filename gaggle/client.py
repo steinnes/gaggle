@@ -73,6 +73,8 @@ class Service:
                             logger.warning("Access denied even after refreshing token:")
                             logger.warning(await response.text())
                             raise AccessDenied("Access denied even after refreshing token")
+                    if response.status == 400:
+                        raise AccessDenied(f"Access denied: response.text()")
                     break
                 except asyncio.TimeoutError as e:
                     logger.warning("timeout: {}".format(e))
