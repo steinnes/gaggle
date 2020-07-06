@@ -75,22 +75,39 @@ async def test_service_request_retries():
     assert s._retry.remaining == 0
 
 
+class BadResponse:
+    def __init__(self, status_code, error_message):
+        self.status = status_code
+        self.error_message = error_message
+
+    async def text(self):
+        return self.error_message
+
+
+class FailingSession(CallCounter):
+    def __init__(self, status_code, error_message):
+        super().__init__()
+        self.error = BadResponse(status_code, error_message)
+
+    async def get(self, *args, **kwargs):
+        return self.error
+
+
 @pytest.mark.asyncio
-async def test_service_request_refresh_token():
-    class UnauthorizedResponse:
-        status = 401
-
-        async def text(self):
-            return "User not authorized to access this mock data"
-
-    class UnauthorizingSession(CallCounter):
-        async def get(self, *args, **kwargs):
-            return UnauthorizedResponse()
-
-    sess = UnauthorizingSession()
+async def test_service_request_refreshes_token_on_unauthorized():
+    sess = FailingSession(status_code=401, error_message="Invalid credentials")
     gaggle_client = mock.Mock()
     s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
     with pytest.raises(AccessDenied):
         await s.method()
     assert gaggle_client.refresh_token.called
     assert sess.calls['get'] == 2
+
+
+@pytest.mark.asyncio
+async def test_service_request_raises_access_denied_on_bad_request():
+    sess = FailingSession(status_code=400, error_message="invalid_grant: Token has been expired or revoked.")
+    gaggle_client = mock.Mock()
+    s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
+    with pytest.raises(AccessDenied):
+        await s.method()
