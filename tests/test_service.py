@@ -5,6 +5,7 @@ from collections import defaultdict
 from unittest import mock
 
 from googleapiclient.http import HttpRequest
+import google.auth.exceptions
 
 from gaggle.client import AccessDenied, GaggleServiceError, Retries, Service
 
@@ -91,7 +92,6 @@ class FailingSession(CallCounter):
 
     async def get(self, *args, **kwargs):
         if len(self.errors) > 1:
-            print("popping!")
             return self.errors.pop()
         return self.errors[0]
 
@@ -127,6 +127,16 @@ async def test_service_request_raises_access_denied_on_immediate_bad_request():
         errors=[BadResponse(status_code=400, error_message="invalid_grant: Token has been expired or revoked.")]
     )
     gaggle_client = mock.Mock()
+    s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
+    with pytest.raises(AccessDenied):
+        await s.method()
+
+
+@pytest.mark.asyncio
+async def test_service_request_raises_access_denied_on_refresh_error_exception():
+    sess = FailingSession(errors=[BadResponse(status_code=401, error_message="Invalid credentials")])
+    gaggle_client = mock.Mock()
+    gaggle_client.refresh_token.side_effect = google.auth.exceptions.RefreshError
     s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
     with pytest.raises(AccessDenied):
         await s.method()

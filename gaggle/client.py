@@ -67,7 +67,10 @@ class Service:
                     response = await doit()
                     if response.status == 401:
                         logger.info("401 status, refreshing token")
-                        self._gaggle_client.refresh_token()
+                        try:
+                            self._gaggle_client.refresh_token()
+                        except google.auth.exceptions.RefreshError:
+                            raise AccessDenied("Unable to refresh token")
                         response = await doit()
                         if response.status in (400, 401):
                             logger.warning("Access denied even after refreshing token:")
