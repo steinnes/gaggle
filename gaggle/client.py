@@ -69,7 +69,7 @@ class Service:
                         logger.info("401 status, refreshing token")
                         self._gaggle_client.refresh_token()
                         response = await doit()
-                        if response.status == 401:
+                        if response.status in (400, 401):
                             logger.warning("Access denied even after refreshing token:")
                             logger.warning(await response.text())
                             raise AccessDenied("Access denied even after refreshing token")

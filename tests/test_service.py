@@ -85,17 +85,20 @@ class BadResponse:
 
 
 class FailingSession(CallCounter):
-    def __init__(self, status_code, error_message):
+    def __init__(self, errors):
+        self.errors = errors
         super().__init__()
-        self.error = BadResponse(status_code, error_message)
 
     async def get(self, *args, **kwargs):
-        return self.error
+        if len(self.errors) > 1:
+            print("popping!")
+            return self.errors.pop()
+        return self.errors[0]
 
 
 @pytest.mark.asyncio
 async def test_service_request_refreshes_token_on_unauthorized():
-    sess = FailingSession(status_code=401, error_message="Invalid credentials")
+    sess = FailingSession(errors=[BadResponse(status_code=401, error_message="Invalid credentials")])
     gaggle_client = mock.Mock()
     s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
     with pytest.raises(AccessDenied):
@@ -105,8 +108,24 @@ async def test_service_request_refreshes_token_on_unauthorized():
 
 
 @pytest.mark.asyncio
-async def test_service_request_raises_access_denied_on_bad_request():
-    sess = FailingSession(status_code=400, error_message="invalid_grant: Token has been expired or revoked.")
+async def test_service_request_raises_access_denied_on_bad_request_after_refresh():
+    sess = FailingSession(
+        errors=[
+            BadResponse(status_code=401, error_message="Invalid credentials"),
+            BadResponse(status_code=400, error_message="invalid_grant: Token has been expired or revoked.")
+        ]
+    )
+    gaggle_client = mock.Mock()
+    s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
+    with pytest.raises(AccessDenied):
+        await s.method()
+
+
+@pytest.mark.asyncio
+async def test_service_request_raises_access_denied_on_immediate_bad_request():
+    sess = FailingSession(
+        errors=[BadResponse(status_code=400, error_message="invalid_grant: Token has been expired or revoked.")]
+    )
     gaggle_client = mock.Mock()
     s = Service(sess, FakeDiscoClient(), gaggle_client, retries=0)
     with pytest.raises(AccessDenied):
